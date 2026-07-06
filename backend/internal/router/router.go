@@ -11,9 +11,15 @@ func Setup(db *sql.DB) *gin.Engine {
 r := gin.Default()
 
 healthHandler := handler.NewHealthHandler(db)
+documentHandler := handler.NewDocumentHandler(db)
 
 r.GET("/health", healthHandler.Health)
 r.GET("/health/db", healthHandler.DatabaseHealth)
+
+api := r.Group("/api")
+{
+api.POST("/documents", documentHandler.CreateDocument)
+}
 
 return r
 }

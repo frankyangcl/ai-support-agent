@@ -19,6 +19,7 @@ r.GET("/health/db", healthHandler.DatabaseHealth)
 api := r.Group("/api")
 {
 api.POST("/documents", documentHandler.CreateDocument)
+api.GET("/documents", documentHandler.ListDocuments)
 }
 
 return r

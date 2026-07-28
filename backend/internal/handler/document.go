@@ -105,10 +105,12 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
+	originalFilename := filepath.Base(fileHeader.Filename)
+
 	storedFilename := fmt.Sprintf(
 		"%d_%s",
 		time.Now().UnixNano(),
-		filepath.Base(fileHeader.Filename),
+		originalFilename,
 	)
 
 	destination := filepath.Join(uploadDir, storedFilename)
@@ -120,14 +122,36 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
+	documentID, characterCount, err :=
+		h.Service.CreateDocumentFromPDF(originalFilename, destination)
+
+	if err != nil {
+		// PDF 解析或数据库写入失败时，删除已经保存的无效文件。
+		if removeErr := os.Remove(destination); removeErr != nil {
+			fmt.Printf(
+				"failed to remove uploaded file %s: %v\n",
+				destination,
+				removeErr,
+			)
+		}
+
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
-		"filename":         fileHeader.Filename,
+		"id":               documentID,
+		"filename":         originalFilename,
 		"stored_filename":  storedFilename,
 		"size":             fileHeader.Size,
+		"character_count":  characterCount,
 		"content_type":     fileHeader.Header.Get("Content-Type"),
 		"storage_location": destination,
 	})
 }
+
 func (h *DocumentHandler) ExtractDocumentText(c *gin.Context) {
 	storedFilename := filepath.Base(c.Param("filename"))
 	if storedFilename == "." || storedFilename == "" {

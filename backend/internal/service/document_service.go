@@ -31,3 +31,22 @@ func (s *DocumentService) ListDocuments() ([]repository.Document, error) {
 func (s *DocumentService) ExtractPDFText(path string) (string, error) {
 	return s.PDFParser.ExtractText(path)
 }
+
+func (s *DocumentService) CreateDocumentFromPDF(
+	filename string,
+	path string,
+) (int, int, error) {
+	text, err := s.PDFParser.ExtractText(path)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	id, err := s.Repo.Create(filename, text)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	characterCount := len([]rune(text))
+
+	return id, characterCount, nil
+}

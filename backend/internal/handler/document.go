@@ -128,3 +128,54 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		"storage_location": destination,
 	})
 }
+func (h *DocumentHandler) ExtractDocumentText(c *gin.Context) {
+	storedFilename := filepath.Base(c.Param("filename"))
+	if storedFilename == "." || storedFilename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "filename is required",
+		})
+		return
+	}
+
+	path := filepath.Join("uploads", storedFilename)
+
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "uploaded PDF not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to access uploaded PDF",
+		})
+		return
+	}
+
+	text, err := h.Service.ExtractPDFText(path)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	const previewLimit = 2000
+
+	preview := text
+	truncated := false
+
+	runes := []rune(text)
+	if len(runes) > previewLimit {
+		preview = string(runes[:previewLimit])
+		truncated = true
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"filename":        storedFilename,
+		"text":            preview,
+		"character_count": len(runes),
+		"truncated":       truncated,
+	})
+}

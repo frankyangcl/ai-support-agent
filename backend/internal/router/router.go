@@ -1,4 +1,4 @@
-﻿package router
+package router
 
 import (
 	"database/sql"
@@ -24,6 +24,7 @@ func Setup(db *sql.DB) *gin.Engine {
 	{
 		api.POST("/documents", documentHandler.CreateDocument)
 		api.GET("/documents", documentHandler.ListDocuments)
+		api.POST("/documents/upload", documentHandler.UploadDocument)
 	}
 
 	return r

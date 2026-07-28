@@ -1,14 +1,14 @@
 ﻿package handler
 
 import (
-	"database/sql"
 	"net/http"
 
+	"github.com/frankyangcl/ai-support-agent/backend/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 type DocumentHandler struct {
-	DB *sql.DB
+	Service *service.DocumentService
 }
 
 type CreateDocumentRequest struct {
@@ -16,9 +16,9 @@ type CreateDocumentRequest struct {
 	Content  string `json:"content" binding:"required"`
 }
 
-func NewDocumentHandler(db *sql.DB) *DocumentHandler {
+func NewDocumentHandler(service *service.DocumentService) *DocumentHandler {
 	return &DocumentHandler{
-		DB: db,
+		Service: service,
 	}
 }
 
@@ -32,15 +32,7 @@ func (h *DocumentHandler) CreateDocument(c *gin.Context) {
 		return
 	}
 
-	var id int
-
-	err := h.DB.QueryRow(
-		`INSERT INTO documents (filename, content)
-		 VALUES ($1, $2)
-		 RETURNING id`,
-		req.Filename,
-		req.Content,
-	).Scan(&id)
+	id, err := h.Service.CreateDocument(req.Filename, req.Content)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -55,41 +47,18 @@ func (h *DocumentHandler) CreateDocument(c *gin.Context) {
 	})
 }
 
-
 func (h *DocumentHandler) ListDocuments(c *gin.Context) {
-	rows, err := h.DB.Query(
-		`SELECT id, filename, created_at
-		 FROM documents
-		 ORDER BY created_at DESC`,
-	)
+	documents, err := h.Service.ListDocuments()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	defer rows.Close()
 
-	type Document struct {
-		ID        int    `json:"id"`
-		Filename  string `json:"filename"`
-		CreatedAt string `json:"created_at"`
-	}
-
-	var documents []Document
-
-	for rows.Next() {
-		var doc Document
-
-		if err := rows.Scan(&doc.ID, &doc.Filename, &doc.CreatedAt); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-
-		documents = append(documents, doc)
-	}
+	c.JSON(http.StatusOK, gin.H{
+		"documents": documents,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"documents": documents,

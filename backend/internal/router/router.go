@@ -3,6 +3,7 @@ package router
 import (
 	"database/sql"
 
+	"github.com/frankyangcl/ai-support-agent/backend/internal/chunker"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/handler"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/parser"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/repository"
@@ -15,8 +16,16 @@ func Setup(db *sql.DB) *gin.Engine {
 
 	healthHandler := handler.NewHealthHandler(db)
 	documentRepo := repository.NewDocumentRepository(db)
+	chunkRepo := repository.NewChunkRepository(db)
 	pdfParser := parser.NewPDFParser()
-	documentService := service.NewDocumentService(documentRepo, pdfParser)
+	textChunker := chunker.NewTextChunker()
+
+	documentService := service.NewDocumentService(
+		documentRepo,
+		chunkRepo,
+		pdfParser,
+		textChunker,
+	)
 	documentHandler := handler.NewDocumentHandler(documentService)
 
 	r.GET("/health", healthHandler.Health)

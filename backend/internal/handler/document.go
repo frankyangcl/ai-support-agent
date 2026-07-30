@@ -122,8 +122,11 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
-	documentID, characterCount, err :=
-		h.Service.CreateDocumentFromPDF(originalFilename, destination)
+	documentID, characterCount, chunkCount, err :=
+		h.Service.CreateDocumentFromPDF(
+			originalFilename,
+			destination,
+		)
 
 	if err != nil {
 		// PDF 解析或数据库写入失败时，删除已经保存的无效文件。
@@ -147,6 +150,7 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		"stored_filename":  storedFilename,
 		"size":             fileHeader.Size,
 		"character_count":  characterCount,
+		"chunk_count":      chunkCount,
 		"content_type":     fileHeader.Header.Get("Content-Type"),
 		"storage_location": destination,
 	})

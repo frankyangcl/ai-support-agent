@@ -10,7 +10,7 @@ type Config struct {
 func Load() Config {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = "postgres://postgres:postgres@localhost:5432/ai_support_agent?sslmode=disable"
+		databaseURL = "postgres://postgres:postgres@localhost:5433/ai_support_agent?sslmode=disable"
 	}
 
 	serverAddr := os.Getenv("SERVER_ADDR")

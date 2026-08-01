@@ -8,6 +8,13 @@ type Document struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type DocumentDetail struct {
+	ID        int
+	Filename  string
+	Content   string
+	CreatedAt string
+}
+
 type DocumentRepository struct {
 	DB *sql.DB
 }
@@ -43,8 +50,7 @@ func (r *DocumentRepository) List() ([]Document, error) {
 	}
 	defer rows.Close()
 
-	var documents []Document
-
+	documents := make([]Document, 0)
 	for rows.Next() {
 		var doc Document
 
@@ -56,4 +62,29 @@ func (r *DocumentRepository) List() ([]Document, error) {
 	}
 
 	return documents, rows.Err()
+}
+
+func (r *DocumentRepository) GetByID(id int) (*DocumentDetail, error) {
+	var doc DocumentDetail
+
+	err := r.DB.QueryRow(`
+		SELECT
+			id,
+			filename,
+			content,
+			created_at
+		FROM documents
+		WHERE id = $1
+	`, id).Scan(
+		&doc.ID,
+		&doc.Filename,
+		&doc.Content,
+		&doc.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &doc, nil
 }

@@ -106,3 +106,23 @@ func (s *DocumentService) CreateDocumentFromPDF(
 
 	return documentID, characterCount, len(chunks), nil
 }
+
+func (s *DocumentService) GetDocument(
+	id int,
+) (
+	*repository.DocumentDetail,
+	[]repository.DocumentChunk,
+	error,
+) {
+	doc, err := s.Repo.GetByID(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	chunks, err := s.ChunkRepo.ListByDocumentID(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return doc, chunks, nil
+}

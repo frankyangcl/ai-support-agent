@@ -1,0 +1,6 @@
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    filename TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

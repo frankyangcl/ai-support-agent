@@ -1,4 +1,4 @@
-package router
+﻿package router
 
 import (
 	"database/sql"
@@ -39,6 +39,10 @@ func Setup(db *sql.DB) *gin.Engine {
 		api.GET(
 			"/documents/uploaded/:filename/text",
 			documentHandler.ExtractDocumentText,
+		)
+		api.GET(
+			"/documents/:id",
+			documentHandler.GetDocument,
 		)
 	}
 

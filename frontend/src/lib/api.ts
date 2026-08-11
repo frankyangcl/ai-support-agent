@@ -1,5 +1,10 @@
-const API_BASE_URL =
+ 
+
+  const PUBLIC_API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+
+const SERVER_API_BASE_URL =
+  process.env.API_BASE_URL ?? PUBLIC_API_BASE_URL;
 
 export type DocumentItem = {
   id: number;
@@ -21,9 +26,12 @@ export type ChatResponse = {
 };
 
 export async function getDocuments(): Promise<DocumentItem[]> {
-  const response = await fetch(`${API_BASE_URL}/api/documents`, {
-    cache: "no-store",
-  });
+  const response = await fetch(
+    `${SERVER_API_BASE_URL}/api/documents`,
+    {
+      cache: "no-store",
+    }
+  );
 
   if (!response.ok) {
     throw new Error("Failed to load documents");
@@ -37,7 +45,7 @@ export async function getDocuments(): Promise<DocumentItem[]> {
 export async function askQuestion(
   question: string
 ): Promise<ChatResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/chat`, {
+  const response = await fetch(`${PUBLIC_API_BASE_URL}/api/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -66,7 +74,7 @@ export async function uploadDocument(
   formData.append("file", file);
 
   const response = await fetch(
-    `${API_BASE_URL}/api/documents/upload`,
+    `${PUBLIC_API_BASE_URL}/api/documents/upload`,
     {
       method: "POST",
       body: formData,
@@ -86,7 +94,7 @@ export async function deleteDocument(
   id: number
 ): Promise<void> {
   const response = await fetch(
-    `${API_BASE_URL}/api/documents/${id}`,
+    `${PUBLIC_API_BASE_URL}/api/documents/${id}`,
     {
       method: "DELETE",
     }

@@ -23,3 +23,11 @@ node_modules/
 
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+.env
+.env.*
+!.env.example
+
+frontend/.env.local
+backend/uploads/*
+!backend/uploads/.gitkeep

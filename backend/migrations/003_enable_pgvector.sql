@@ -2,3 +2,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 ALTER TABLE document_chunks
 ADD COLUMN IF NOT EXISTS embedding vector(1536);
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+ALTER TABLE document_chunks
+ADD COLUMN IF NOT EXISTS embedding vector(1024);

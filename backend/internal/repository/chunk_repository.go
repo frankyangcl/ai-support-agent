@@ -3,6 +3,8 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/pgvector/pgvector-go"
 )
 
 type ChunkRepository struct {
@@ -27,6 +29,15 @@ type CreateChunkInput struct {
 	ChunkIndex     int
 	Content        string
 	CharacterCount int
+}
+
+type ChunkSearchResult struct {
+	ID             int
+	DocumentID     int
+	ChunkIndex     int
+	Content        string
+	CharacterCount int
+	Distance       float64
 }
 
 func (r *ChunkRepository) CreateBatch(
@@ -146,4 +157,113 @@ func (r *DocumentRepository) Delete(id int) error {
 	}
 
 	return nil
+}
+
+func (r *ChunkRepository) ListWithoutEmbedding() ([]DocumentChunk, error) {
+	rows, err := r.DB.Query(`
+		SELECT
+			id,
+			document_id,
+			chunk_index,
+			content,
+			character_count
+		FROM document_chunks
+		WHERE embedding IS NULL
+		ORDER BY id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	chunks := make([]DocumentChunk, 0)
+
+	for rows.Next() {
+		var chunk DocumentChunk
+
+		if err := rows.Scan(
+			&chunk.ID,
+			&chunk.DocumentID,
+			&chunk.ChunkIndex,
+			&chunk.Content,
+			&chunk.CharacterCount,
+		); err != nil {
+			return nil, err
+		}
+
+		chunks = append(chunks, chunk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return chunks, nil
+}
+
+func (r *ChunkRepository) UpdateEmbedding(
+	id int,
+	embedding []float32,
+) error {
+	_, err := r.DB.Exec(`
+		UPDATE document_chunks
+		SET embedding = $1
+		WHERE id = $2
+	`,
+		pgvector.NewVector(embedding),
+		id,
+	)
+
+	return err
+}
+
+func (r *ChunkRepository) SearchSimilar(
+	embedding []float32,
+	limit int,
+) ([]ChunkSearchResult, error) {
+	rows, err := r.DB.Query(`
+		SELECT
+			id,
+			document_id,
+			chunk_index,
+			content,
+			character_count,
+			embedding <=> $1 AS distance
+		FROM document_chunks
+		WHERE embedding IS NOT NULL
+		ORDER BY embedding <=> $1
+		LIMIT $2
+	`,
+		pgvector.NewVector(embedding),
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]ChunkSearchResult, 0)
+
+	for rows.Next() {
+		var result ChunkSearchResult
+
+		if err := rows.Scan(
+			&result.ID,
+			&result.DocumentID,
+			&result.ChunkIndex,
+			&result.Content,
+			&result.CharacterCount,
+			&result.Distance,
+		); err != nil {
+			return nil, err
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

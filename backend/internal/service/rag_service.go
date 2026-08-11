@@ -41,14 +41,20 @@ func (s *RAGService) Ask(
 	results, err := s.EmbeddingService.Search(
 		ctx,
 		question,
-		3,
+		8,
 	)
+	if len(results) > 3 {
+		results = results[:3]
+	}
 	if err != nil {
 		return nil, fmt.Errorf("retrieve context: %w", err)
 	}
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no relevant document chunks found")
+		return &RAGResult{
+			Answer:  "I couldn't find enough relevant information in the knowledge base to answer that question.",
+			Sources: nil,
+		}, nil
 	}
 
 	var contextBuilder strings.Builder

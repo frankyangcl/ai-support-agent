@@ -94,6 +94,10 @@ func Setup(
 			documentHandler.GetDocument,
 		)
 		api.POST("/chat", chatHandler.Chat)
+		api.DELETE(
+			"/documents/:id",
+			documentHandler.DeleteDocument,
+		)
 	}
 
 	return r

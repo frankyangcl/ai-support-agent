@@ -75,7 +75,17 @@ func (s *EmbeddingService) Search(
 		return nil, fmt.Errorf("search similar chunks: %w", err)
 	}
 
-	return results, nil
+	const maxDistance = 0.45
+
+	filtered := make([]repository.ChunkSearchResult, 0, len(results))
+
+	for _, result := range results {
+		if result.Distance <= maxDistance {
+			filtered = append(filtered, result)
+		}
+	}
+
+	return filtered, nil
 }
 
 func (s *EmbeddingService) ProcessDocumentChunks(

@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"fmt"
@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"database/sql"
+	"strconv"
 
 	"github.com/frankyangcl/ai-support-agent/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -127,13 +130,23 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		)
 
 	if err != nil {
-		// PDF 解析或数据库写入失败时，删除已经保存的无效文件。
+		// 处理失败时，删除已经保存的上传文件。
 		if removeErr := os.Remove(destination); removeErr != nil {
 			fmt.Printf(
 				"failed to remove uploaded file %s: %v\n",
 				destination,
 				removeErr,
 			)
+		}
+
+		if strings.Contains(
+			err.Error(),
+			"document already exists",
+		) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "document already exists in knowledge base",
+			})
+			return
 		}
 
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -204,5 +217,36 @@ func (h *DocumentHandler) ExtractDocumentText(c *gin.Context) {
 		"text":            preview,
 		"character_count": len(runes),
 		"truncated":       truncated,
+	})
+}
+func (h *DocumentHandler) DeleteDocument(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid document id",
+		})
+		return
+	}
+
+	err = h.Service.DeleteDocument(id)
+
+	if err != nil {
+
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "document not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "deleted",
+		"id":     id,
 	})
 }

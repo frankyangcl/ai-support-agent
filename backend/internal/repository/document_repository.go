@@ -25,15 +25,25 @@ func NewDocumentRepository(db *sql.DB) *DocumentRepository {
 	}
 }
 
-func (r *DocumentRepository) Create(filename, content string) (int, error) {
+func (r *DocumentRepository) Create(
+	filename string,
+	content string,
+	fileHash string,
+) (int, error) {
 	var id int
 
-	err := r.DB.QueryRow(
-		`INSERT INTO documents (filename, content)
-		 VALUES ($1, $2)
-		 RETURNING id`,
+	err := r.DB.QueryRow(`
+		INSERT INTO documents (
+			filename,
+			content,
+			file_hash
+		)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`,
 		filename,
 		content,
+		fileHash,
 	).Scan(&id)
 
 	return id, err
@@ -87,4 +97,18 @@ func (r *DocumentRepository) GetByID(id int) (*DocumentDetail, error) {
 	}
 
 	return &doc, nil
+}
+
+func (r *DocumentRepository) ExistsByHash(hash string) (bool, error) {
+	var exists bool
+
+	err := r.DB.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1
+			FROM documents
+			WHERE file_hash = $1
+		)
+	`, hash).Scan(&exists)
+
+	return exists, err
 }

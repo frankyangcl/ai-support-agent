@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { uploadDocument } from "@/lib/api";
 
 export default function UploadDocument() {
   const router = useRouter();
@@ -22,24 +23,7 @@ export default function UploadDocument() {
     setError("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(
-        "http://localhost:8080/api/documents/upload",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-
-        throw new Error(
-          data?.error ?? "Failed to upload document"
-        );
-      }
+      await uploadDocument(file);
 
       router.refresh();
     } catch (err) {
@@ -56,17 +40,17 @@ export default function UploadDocument() {
 
   return (
     <div className="mb-5">
-      <label className="inline-flex cursor-pointer items-center rounded-lg bg-black px-4 py-2 text-sm text-white">
-        {uploading ? "Processing..." : "Upload PDF"}
+     <label className="flex w-full cursor-pointer items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800">
+  {uploading ? "Processing document..." : "+ Upload PDF"}
 
-        <input
-          type="file"
-          accept="application/pdf,.pdf"
-          disabled={uploading}
-          onChange={handleChange}
-          className="hidden"
-        />
-      </label>
+  <input
+    type="file"
+    accept="application/pdf,.pdf"
+    disabled={uploading}
+    onChange={handleChange}
+    className="hidden"
+  />
+</label>
 
       {uploading && (
         <p className="mt-2 text-xs text-gray-500">

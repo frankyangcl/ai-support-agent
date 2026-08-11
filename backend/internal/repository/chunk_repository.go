@@ -267,3 +267,48 @@ func (r *ChunkRepository) SearchSimilar(
 
 	return results, nil
 }
+
+func (r *ChunkRepository) ListWithoutEmbeddingByDocumentID(
+	documentID int,
+) ([]DocumentChunk, error) {
+	rows, err := r.DB.Query(`
+		SELECT
+			id,
+			document_id,
+			chunk_index,
+			content,
+			character_count
+		FROM document_chunks
+		WHERE document_id = $1
+		  AND embedding IS NULL
+		ORDER BY chunk_index
+	`, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	chunks := make([]DocumentChunk, 0)
+
+	for rows.Next() {
+		var chunk DocumentChunk
+
+		if err := rows.Scan(
+			&chunk.ID,
+			&chunk.DocumentID,
+			&chunk.ChunkIndex,
+			&chunk.Content,
+			&chunk.CharacterCount,
+		); err != nil {
+			return nil, err
+		}
+
+		chunks = append(chunks, chunk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return chunks, nil
+}

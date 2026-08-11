@@ -77,3 +77,44 @@ func (s *EmbeddingService) Search(
 
 	return results, nil
 }
+
+func (s *EmbeddingService) ProcessDocumentChunks(
+	ctx context.Context,
+	documentID int,
+) (int, error) {
+	chunks, err := s.ChunkRepo.ListWithoutEmbeddingByDocumentID(documentID)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"list document chunks without embedding: %w",
+			err,
+		)
+	}
+
+	processed := 0
+
+	for _, chunk := range chunks {
+		vector, err := s.Client.Embed(ctx, chunk.Content)
+		if err != nil {
+			return processed, fmt.Errorf(
+				"embed chunk %d: %w",
+				chunk.ID,
+				err,
+			)
+		}
+
+		if err := s.ChunkRepo.UpdateEmbedding(
+			chunk.ID,
+			vector,
+		); err != nil {
+			return processed, fmt.Errorf(
+				"update embedding for chunk %d: %w",
+				chunk.ID,
+				err,
+			)
+		}
+
+		processed++
+	}
+
+	return processed, nil
+}

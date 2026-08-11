@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/frankyangcl/ai-support-agent/backend/internal/chunker"
@@ -9,10 +10,11 @@ import (
 )
 
 type DocumentService struct {
-	Repo        *repository.DocumentRepository
-	ChunkRepo   *repository.ChunkRepository
-	PDFParser   *parser.PDFParser
-	TextChunker *chunker.TextChunker
+	Repo             *repository.DocumentRepository
+	ChunkRepo        *repository.ChunkRepository
+	PDFParser        *parser.PDFParser
+	TextChunker      *chunker.TextChunker
+	EmbeddingService *EmbeddingService
 }
 
 func NewDocumentService(
@@ -20,12 +22,14 @@ func NewDocumentService(
 	chunkRepo *repository.ChunkRepository,
 	pdfParser *parser.PDFParser,
 	textChunker *chunker.TextChunker,
+	embeddingService *EmbeddingService,
 ) *DocumentService {
 	return &DocumentService{
-		Repo:        repo,
-		ChunkRepo:   chunkRepo,
-		PDFParser:   pdfParser,
-		TextChunker: textChunker,
+		Repo:             repo,
+		ChunkRepo:        chunkRepo,
+		PDFParser:        pdfParser,
+		TextChunker:      textChunker,
+		EmbeddingService: embeddingService,
 	}
 }
 
@@ -48,9 +52,11 @@ func (s *DocumentService) ExtractPDFText(path string) (string, error) {
 }
 
 func (s *DocumentService) CreateDocumentFromPDF(
+	ctx context.Context,
 	filename string,
 	path string,
 ) (int, int, int, error) {
+
 	text, err := s.PDFParser.ExtractText(path)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("extract PDF text: %w", err)
@@ -103,6 +109,44 @@ func (s *DocumentService) CreateDocumentFromPDF(
 	}
 
 	characterCount := len([]rune(text))
+
+	embeddedCount, err := s.EmbeddingService.ProcessDocumentChunks(
+		ctx,
+		documentID,
+	)
+	if err != nil {
+		deleteErr := s.Repo.Delete(documentID)
+		if deleteErr != nil {
+			return 0, 0, 0, fmt.Errorf(
+				"generate embeddings: %v; rollback document: %w",
+				err,
+				deleteErr,
+			)
+		}
+
+		return 0, 0, 0, fmt.Errorf(
+			"generate document embeddings: %w",
+			err,
+		)
+	}
+
+	if embeddedCount != len(chunks) {
+		deleteErr := s.Repo.Delete(documentID)
+		if deleteErr != nil {
+			return 0, 0, 0, fmt.Errorf(
+				"expected %d embeddings, got %d; rollback document: %w",
+				len(chunks),
+				embeddedCount,
+				deleteErr,
+			)
+		}
+
+		return 0, 0, 0, fmt.Errorf(
+			"expected %d embeddings, got %d",
+			len(chunks),
+			embeddedCount,
+		)
+	}
 
 	return documentID, characterCount, len(chunks), nil
 }

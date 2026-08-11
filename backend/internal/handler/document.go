@@ -124,6 +124,7 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 
 	documentID, characterCount, chunkCount, err :=
 		h.Service.CreateDocumentFromPDF(
+			c.Request.Context(),
 			originalFilename,
 			destination,
 		)
@@ -153,6 +154,7 @@ func (h *DocumentHandler) UploadDocument(c *gin.Context) {
 		"chunk_count":      chunkCount,
 		"content_type":     fileHeader.Header.Get("Content-Type"),
 		"storage_location": destination,
+		"status":           "ready",
 	})
 }
 

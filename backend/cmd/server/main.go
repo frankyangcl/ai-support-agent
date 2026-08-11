@@ -1,25 +1,24 @@
-﻿package main
+package main
 
 import (
-"log"
+	"log"
 
-"github.com/frankyangcl/ai-support-agent/backend/internal/config"
-"github.com/frankyangcl/ai-support-agent/backend/internal/database"
-"github.com/frankyangcl/ai-support-agent/backend/internal/router"
+	"github.com/frankyangcl/ai-support-agent/backend/internal/config"
+	"github.com/frankyangcl/ai-support-agent/backend/internal/database"
+	"github.com/frankyangcl/ai-support-agent/backend/internal/router"
 )
 
 func main() {
-cfg := config.Load()
+	cfg := config.Load()
 
-db, err := database.Connect(cfg.DatabaseURL)
-if err != nil {
-log.Fatal(err)
-}
-defer db.Close()
+	db, err := database.Connect(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
-r := router.Setup(db)
-
-if err := r.Run(cfg.ServerAddr); err != nil {
-log.Fatal(err)
-}
+	r := router.Setup(db, cfg)
+	if err := r.Run(cfg.ServerAddr); err != nil {
+		log.Fatal(err)
+	}
 }

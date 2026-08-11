@@ -1,4 +1,4 @@
-﻿package router
+package router
 
 import (
 	"database/sql"
@@ -9,9 +9,16 @@ import (
 	"github.com/frankyangcl/ai-support-agent/backend/internal/repository"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/service"
 	"github.com/gin-gonic/gin"
+
+	"github.com/frankyangcl/ai-support-agent/backend/internal/config"
+	"github.com/frankyangcl/ai-support-agent/backend/internal/embedding"
+	"github.com/frankyangcl/ai-support-agent/backend/internal/llm"
 )
 
-func Setup(db *sql.DB) *gin.Engine {
+func Setup(
+	db *sql.DB,
+	cfg config.Config,
+) *gin.Engine {
 	r := gin.Default()
 
 	healthHandler := handler.NewHealthHandler(db)
@@ -20,11 +27,33 @@ func Setup(db *sql.DB) *gin.Engine {
 	pdfParser := parser.NewPDFParser()
 	textChunker := chunker.NewTextChunker()
 
+	embeddingClient := embedding.NewBailianClient(
+		cfg.DashScopeAPIKey,
+		cfg.BailianBaseURL,
+	)
+
+	embeddingService := service.NewEmbeddingService(
+		chunkRepo,
+		embeddingClient,
+	)
+
+	deepSeekClient := llm.NewDeepSeekClient(
+		cfg.DeepSeekAPIKey,
+	)
+
+	ragService := service.NewRAGService(
+		embeddingService,
+		deepSeekClient,
+	)
+
+	chatHandler := handler.NewChatHandler(ragService)
+
 	documentService := service.NewDocumentService(
 		documentRepo,
 		chunkRepo,
 		pdfParser,
 		textChunker,
+		embeddingService,
 	)
 	documentHandler := handler.NewDocumentHandler(documentService)
 
@@ -44,6 +73,7 @@ func Setup(db *sql.DB) *gin.Engine {
 			"/documents/:id",
 			documentHandler.GetDocument,
 		)
+		api.POST("/chat", chatHandler.Chat)
 	}
 
 	return r

@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"fmt"
@@ -65,9 +65,6 @@ func (h *DocumentHandler) ListDocuments(c *gin.Context) {
 		"documents": documents,
 	})
 
-	c.JSON(http.StatusOK, gin.H{
-		"documents": documents,
-	})
 }
 
 const maxUploadSize = 10 << 20 // 10 MB

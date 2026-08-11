@@ -57,10 +57,18 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 	sources := make([]gin.H, 0, len(result.Sources))
 
 	for _, source := range result.Sources {
+		previewRunes := []rune(source.Content)
+
+		if len(previewRunes) > 200 {
+			previewRunes = previewRunes[:200]
+		}
+
 		sources = append(sources, gin.H{
 			"document_id": source.DocumentID,
+			"filename":    source.Filename,
 			"chunk_index": source.ChunkIndex,
 			"distance":    source.Distance,
+			"preview":     string(previewRunes),
 		})
 	}
 

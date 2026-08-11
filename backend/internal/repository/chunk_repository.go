@@ -34,6 +34,7 @@ type CreateChunkInput struct {
 type ChunkSearchResult struct {
 	ID             int
 	DocumentID     int
+	Filename       string
 	ChunkIndex     int
 	Content        string
 	CharacterCount int
@@ -223,15 +224,18 @@ func (r *ChunkRepository) SearchSimilar(
 ) ([]ChunkSearchResult, error) {
 	rows, err := r.DB.Query(`
 		SELECT
-			id,
-			document_id,
-			chunk_index,
-			content,
-			character_count,
-			embedding <=> $1 AS distance
-		FROM document_chunks
-		WHERE embedding IS NOT NULL
-		ORDER BY embedding <=> $1
+			dc.id,
+			dc.document_id,
+			d.filename,
+			dc.chunk_index,
+			dc.content,
+			dc.character_count,
+			dc.embedding <=> $1 AS distance
+		FROM document_chunks dc
+		JOIN documents d
+			ON d.id = dc.document_id
+		WHERE dc.embedding IS NOT NULL
+		ORDER BY dc.embedding <=> $1
 		LIMIT $2
 	`,
 		pgvector.NewVector(embedding),
@@ -250,6 +254,7 @@ func (r *ChunkRepository) SearchSimilar(
 		if err := rows.Scan(
 			&result.ID,
 			&result.DocumentID,
+			&result.Filename,
 			&result.ChunkIndex,
 			&result.Content,
 			&result.CharacterCount,

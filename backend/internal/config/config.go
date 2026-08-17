@@ -8,6 +8,8 @@ type Config struct {
 	DeepSeekAPIKey  string
 	DashScopeAPIKey string
 	BailianBaseURL  string
+	Auth0Domain     string
+	Auth0Audience   string
 }
 
 func Load() Config {
@@ -31,6 +33,8 @@ func Load() Config {
 		DeepSeekAPIKey:  deepSeekAPIKey,
 		DashScopeAPIKey: dashScopeAPIKey,
 		BailianBaseURL:  bailianBaseURL,
+		Auth0Domain:     os.Getenv("AUTH0_DOMAIN"),
+		Auth0Audience:   os.Getenv("AUTH0_AUDIENCE"),
 	}
 
 }

@@ -2,7 +2,9 @@ package router
 
 import (
 	"database/sql"
+	"fmt"
 
+	"github.com/frankyangcl/ai-support-agent/backend/internal/auth"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/chunker"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/handler"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/parser"
@@ -19,7 +21,7 @@ import (
 func Setup(
 	db *sql.DB,
 	cfg config.Config,
-) *gin.Engine {
+) (*gin.Engine, error) {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
@@ -76,12 +78,17 @@ func Setup(
 		embeddingService,
 	)
 	documentHandler := handler.NewDocumentHandler(documentService)
+	authMiddleware, err := auth.New(cfg.Auth0Domain, cfg.Auth0Audience)
+	if err != nil {
+		return nil, fmt.Errorf("configure authentication: %w", err)
+	}
 
 	r.GET("/health", healthHandler.Health)
 	r.GET("/health/db", healthHandler.DatabaseHealth)
 
-	api := r.Group("/api")
+	api := r.Group("/api", authMiddleware)
 	{
+		api.GET("/me", handler.Me)
 		api.POST("/documents", documentHandler.CreateDocument)
 		api.GET("/documents", documentHandler.ListDocuments)
 		api.POST("/documents/upload", documentHandler.UploadDocument)
@@ -100,5 +107,5 @@ func Setup(
 		)
 	}
 
-	return r
+	return r, nil
 }

@@ -17,7 +17,10 @@ func main() {
 	}
 	defer db.Close()
 
-	r := router.Setup(db, cfg)
+	r, err := router.Setup(db, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := r.Run(cfg.ServerAddr); err != nil {
 		log.Fatal(err)
 	}

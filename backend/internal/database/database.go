@@ -1,11 +1,11 @@
-﻿package database
+package database
 
 import (
-"database/sql"
+	"database/sql"
 
-_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func Connect(databaseURL string) (*sql.DB, error) {
-return sql.Open("pgx", databaseURL)
+	return sql.Open("pgx", databaseURL)
 }

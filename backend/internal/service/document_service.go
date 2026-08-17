@@ -3,14 +3,22 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/frankyangcl/ai-support-agent/backend/internal/chunker"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/parser"
 	"github.com/frankyangcl/ai-support-agent/backend/internal/repository"
 )
+
+var ErrDuplicateDocument = errors.New("document already exists")
+var ErrInvalidState = errors.New("invalid document state")
 
 type DocumentService struct {
 	Repo             *repository.DocumentRepository
@@ -18,190 +26,142 @@ type DocumentService struct {
 	PDFParser        *parser.PDFParser
 	TextChunker      *chunker.TextChunker
 	EmbeddingService *EmbeddingService
+	UploadDir        string
 }
 
-func NewDocumentService(
-	repo *repository.DocumentRepository,
-	chunkRepo *repository.ChunkRepository,
-	pdfParser *parser.PDFParser,
-	textChunker *chunker.TextChunker,
-	embeddingService *EmbeddingService,
-) *DocumentService {
-	return &DocumentService{
-		Repo:             repo,
-		ChunkRepo:        chunkRepo,
-		PDFParser:        pdfParser,
-		TextChunker:      textChunker,
-		EmbeddingService: embeddingService,
-	}
+func NewDocumentService(repo *repository.DocumentRepository, chunkRepo *repository.ChunkRepository, pdf *parser.PDFParser, text *chunker.TextChunker, embedding *EmbeddingService) *DocumentService {
+	return &DocumentService{repo, chunkRepo, pdf, text, embedding, "uploads"}
 }
 
-func (s *DocumentService) CreateDocument(
-	filename string,
-	content string,
-) (int, error) {
-	return s.Repo.Create(filename, content, "")
+func (s *DocumentService) CreateDocument(owner, filename, content string) (int, error) {
+	return s.Repo.Create(owner, filename, content, "")
+}
+func (s *DocumentService) ListDocuments(owner string) ([]repository.Document, error) {
+	return s.Repo.List(owner)
+}
+func (s *DocumentService) GetDocument(owner string, id int) (*repository.DocumentDetail, error) {
+	return s.Repo.GetByID(owner, id)
 }
 
-func (s *DocumentService) ListDocuments() (
-	[]repository.Document,
-	error,
-) {
-	return s.Repo.List()
-}
-
-func (s *DocumentService) ExtractPDFText(path string) (string, error) {
-	return s.PDFParser.ExtractText(path)
-}
-
-func (s *DocumentService) CreateDocumentFromPDF(
-	ctx context.Context,
-	filename string,
-	path string,
-) (int, int, int, error) {
-	fileHash, err := calculateFileHash(path)
+func (s *DocumentService) CreateDocumentFromPDF(ctx context.Context, owner, filename, path, storage, mime string, size int64) (*repository.DocumentDetail, error) {
+	hash, err := calculateFileHash(path)
 	if err != nil {
-		return 0, 0, 0, err
+		return nil, err
 	}
-
-	exists, err := s.Repo.ExistsByHash(fileHash)
+	exists, err := s.Repo.ExistsByHash(owner, hash)
 	if err != nil {
-
-		return 0, 0, 0, fmt.Errorf(
-			"check duplicate document: %w",
-			err,
-		)
+		return nil, fmt.Errorf("check duplicate: %w", err)
 	}
-
 	if exists {
-		return 0, 0, 0, fmt.Errorf(
-			"document already exists in knowledge base",
-		)
+		return nil, ErrDuplicateDocument
 	}
+	id, err := s.Repo.CreateProcessing(owner, filename, storage, hash, size, mime)
+	if err != nil {
+		return nil, fmt.Errorf("create processing document: %w", err)
+	}
+	processErr := s.process(ctx, owner, id, path)
+	if processErr != nil {
+		_ = s.Repo.MarkFailed(owner, id, "processing_failed")
+		log.Printf("document processing failed document_id=%d category=processing_failed: %v", id, processErr)
+	} else {
+		log.Printf("document processing ready document_id=%d", id)
+	}
+	doc, getErr := s.Repo.GetByID(owner, id)
+	if getErr != nil {
+		return nil, getErr
+	}
+	return doc, processErr
+}
+
+func (s *DocumentService) process(ctx context.Context, owner string, id int, path string) error {
 	text, err := s.PDFParser.ExtractText(path)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("extract PDF text: %w", err)
+		return fmt.Errorf("extract PDF: %w", err)
 	}
-
 	chunks := s.TextChunker.Split(text)
 	if len(chunks) == 0 {
-		return 0, 0, 0, fmt.Errorf("PDF produced no text chunks")
+		return errors.New("PDF produced no text chunks")
 	}
-
-	documentID, err := s.Repo.Create(filename, text, fileHash)
+	if err = s.ChunkRepo.DeleteByDocumentID(id); err != nil {
+		return fmt.Errorf("clear chunks: %w", err)
+	}
+	inputs := make([]repository.CreateChunkInput, 0, len(chunks))
+	for _, c := range chunks {
+		inputs = append(inputs, repository.CreateChunkInput{ChunkIndex: c.Index, Content: c.Content, CharacterCount: c.CharacterCount})
+	}
+	if err = s.ChunkRepo.CreateBatch(id, inputs); err != nil {
+		return fmt.Errorf("create chunks: %w", err)
+	}
+	count, err := s.EmbeddingService.ProcessDocumentChunks(ctx, id)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("create document: %w", err)
+		return fmt.Errorf("embed chunks: %w", err)
 	}
-
-	chunkInputs := make(
-		[]repository.CreateChunkInput,
-		0,
-		len(chunks),
-	)
-
-	for _, textChunk := range chunks {
-		chunkInputs = append(
-			chunkInputs,
-			repository.CreateChunkInput{
-				ChunkIndex:     textChunk.Index,
-				Content:        textChunk.Content,
-				CharacterCount: textChunk.CharacterCount,
-			},
-		)
+	if count != len(chunks) {
+		return fmt.Errorf("embedding count mismatch")
 	}
-
-	if err := s.ChunkRepo.CreateBatch(
-		documentID,
-		chunkInputs,
-	); err != nil {
-		deleteErr := s.Repo.Delete(documentID)
-		if deleteErr != nil {
-			return 0, 0, 0, fmt.Errorf(
-				"create chunks: %v; rollback document: %w",
-				err,
-				deleteErr,
-			)
-		}
-
-		return 0, 0, 0, fmt.Errorf(
-			"create document chunks: %w",
-			err,
-		)
+	if err = s.Repo.MarkReady(owner, id, text); err != nil {
+		return fmt.Errorf("mark ready: %w", err)
 	}
-
-	characterCount := len([]rune(text))
-
-	embeddedCount, err := s.EmbeddingService.ProcessDocumentChunks(
-		ctx,
-		documentID,
-	)
-	if err != nil {
-		deleteErr := s.Repo.Delete(documentID)
-		if deleteErr != nil {
-			return 0, 0, 0, fmt.Errorf(
-				"generate embeddings: %v; rollback document: %w",
-				err,
-				deleteErr,
-			)
-		}
-
-		return 0, 0, 0, fmt.Errorf(
-			"generate document embeddings: %w",
-			err,
-		)
-	}
-
-	if embeddedCount != len(chunks) {
-		deleteErr := s.Repo.Delete(documentID)
-		if deleteErr != nil {
-			return 0, 0, 0, fmt.Errorf(
-				"expected %d embeddings, got %d; rollback document: %w",
-				len(chunks),
-				embeddedCount,
-				deleteErr,
-			)
-		}
-
-		return 0, 0, 0, fmt.Errorf(
-			"expected %d embeddings, got %d",
-			len(chunks),
-			embeddedCount,
-		)
-	}
-
-	return documentID, characterCount, len(chunks), nil
+	return nil
 }
 
-func (s *DocumentService) GetDocument(
-	id int,
-) (
-	*repository.DocumentDetail,
-	[]repository.DocumentChunk,
-	error,
-) {
-	doc, err := s.Repo.GetByID(id)
-	if err != nil {
-		return nil, nil, err
+func (s *DocumentService) Retry(ctx context.Context, owner string, id int) (*repository.DocumentDetail, error) {
+	doc, err := s.Repo.BeginRetry(owner, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		if _, getErr := s.Repo.GetByID(owner, id); getErr != nil {
+			return nil, sql.ErrNoRows
+		}
+		return nil, ErrInvalidState
 	}
-
-	chunks, err := s.ChunkRepo.ListByDocumentID(id)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	return doc, chunks, nil
+	if doc.StorageName == "" {
+		_ = s.Repo.MarkFailed(owner, id, "source_unavailable")
+		return nil, errors.New("source file unavailable")
+	}
+	err = s.process(ctx, owner, id, filepath.Join(s.UploadDir, doc.StorageName))
+	if err != nil {
+		_ = s.Repo.MarkFailed(owner, id, "processing_failed")
+		log.Printf("document retry failed document_id=%d category=processing_failed: %v", id, err)
+	}
+	updated, getErr := s.Repo.GetByID(owner, id)
+	if getErr != nil {
+		return nil, getErr
+	}
+	return updated, err
 }
 
-func (s *DocumentService) DeleteDocument(id int) error {
-	return s.Repo.Delete(id)
+func (s *DocumentService) DeleteDocument(owner string, id int) error {
+	doc, err := s.Repo.GetByID(owner, id)
+	if err != nil {
+		return err
+	}
+	if doc.Status == "processing" {
+		return ErrInvalidState
+	}
+	storage, err := s.Repo.Delete(owner, id)
+	if err != nil {
+		return err
+	}
+	if storage != "" {
+		path := filepath.Join(s.UploadDir, filepath.Base(storage))
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Printf("document file cleanup failed document_id=%d category=storage_cleanup", id)
+		}
+	}
+	return nil
 }
+
 func calculateFileHash(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("read file for hashing: %w", err)
+		return "", err
 	}
-
-	sum := sha256.Sum256(data)
-
-	return hex.EncodeToString(sum[:]), nil
+	defer f.Close()
+	hash := sha256.New()
+	if _, err = io.Copy(hash, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }

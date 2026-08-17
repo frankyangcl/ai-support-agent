@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+uploads/*
+!uploads/.gitkeep
+server
+*.exe
+coverage.out
+coverage.html
+*.test

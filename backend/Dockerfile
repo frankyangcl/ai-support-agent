@@ -13,11 +13,13 @@ FROM alpine:3.22
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && addgroup -S app && adduser -S -G app app
 
-COPY --from=builder /app/server ./server
+COPY --from=builder --chown=app:app /app/server ./server
 
-RUN mkdir -p uploads
+RUN mkdir -p uploads && chown app:app uploads
+
+USER app
 
 EXPOSE 8080
 

@@ -50,6 +50,7 @@ func main() {
 
 	results, err := embeddingService.Search(
 		ctx,
+		"demo|searchtest",
 		"How long do customers have to request a refund?",
 		3,
 	)

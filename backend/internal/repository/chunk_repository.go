@@ -139,27 +139,6 @@ func (r *ChunkRepository) ListByDocumentID(
 
 	return chunks, nil
 }
-func (r *DocumentRepository) Delete(id int) error {
-	result, err := r.DB.Exec(`
-		DELETE FROM documents
-		WHERE id = $1
-	`, id)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
-}
-
 func (r *ChunkRepository) ListWithoutEmbedding() ([]DocumentChunk, error) {
 	rows, err := r.DB.Query(`
 		SELECT
@@ -219,6 +198,7 @@ func (r *ChunkRepository) UpdateEmbedding(
 }
 
 func (r *ChunkRepository) SearchSimilar(
+	ownerSub string,
 	embedding []float32,
 	limit int,
 ) ([]ChunkSearchResult, error) {
@@ -235,11 +215,13 @@ func (r *ChunkRepository) SearchSimilar(
 		JOIN documents d
 			ON d.id = dc.document_id
 		WHERE dc.embedding IS NOT NULL
+		  AND d.owner_sub = $3
 		ORDER BY dc.embedding <=> $1
 		LIMIT $2
 	`,
 		pgvector.NewVector(embedding),
 		limit,
+		ownerSub,
 	)
 	if err != nil {
 		return nil, err
@@ -271,6 +253,11 @@ func (r *ChunkRepository) SearchSimilar(
 	}
 
 	return results, nil
+}
+
+func (r *ChunkRepository) DeleteByDocumentID(documentID int) error {
+	_, err := r.DB.Exec(`DELETE FROM document_chunks WHERE document_id = $1`, documentID)
+	return err
 }
 
 func (r *ChunkRepository) ListWithoutEmbeddingByDocumentID(

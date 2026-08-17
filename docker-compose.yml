@@ -6,7 +6,7 @@
 
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ai_support_agent
 
     ports:
@@ -35,12 +35,20 @@
     restart: unless-stopped
 
     environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ai_support_agent?sslmode=disable
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/ai_support_agent?sslmode=disable
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       BAILIAN_BASE_URL: ${BAILIAN_BASE_URL}
       AUTH0_DOMAIN: ${AUTH0_DOMAIN}
       AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-10}
+      CHAT_HISTORY_LIMIT: ${CHAT_HISTORY_LIMIT:-20}
+      PORT: 8080
+      GIN_MODE: ${GIN_MODE:-release}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-30}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1m}
 
     ports:
       - "8080:8080"
@@ -51,6 +59,12 @@
     depends_on:
       postgres:
         condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build:

@@ -62,6 +62,7 @@ func (s *EmbeddingService) ProcessPendingChunks(
 
 func (s *EmbeddingService) Search(
 	ctx context.Context,
+	ownerSub string,
 	query string,
 	limit int,
 ) ([]repository.ChunkSearchResult, error) {
@@ -70,7 +71,7 @@ func (s *EmbeddingService) Search(
 		return nil, fmt.Errorf("embed search query: %w", err)
 	}
 
-	results, err := s.ChunkRepo.SearchSimilar(vector, limit)
+	results, err := s.ChunkRepo.SearchSimilar(ownerSub, vector, limit)
 	if err != nil {
 		return nil, fmt.Errorf("search similar chunks: %w", err)
 	}

@@ -85,3 +85,11 @@ func unauthorized(w http.ResponseWriter, _ *http.Request, _ error) {
 	w.WriteHeader(http.StatusUnauthorized)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 }
+
+func Subject(r *http.Request) (string, error) {
+	claims, err := jwtmiddleware.GetClaims[*validator.ValidatedClaims](r.Context())
+	if err != nil || claims == nil || claims.RegisteredClaims.Subject == "" {
+		return "", errors.New("validated subject is unavailable")
+	}
+	return claims.RegisteredClaims.Subject, nil
+}

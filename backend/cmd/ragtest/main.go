@@ -73,6 +73,7 @@ func main() {
 
 	result, err := ragService.Ask(
 		ctx,
+		"demo|ragtest",
 		"How long do customers have to request a refund?",
 	)
 	if err != nil {
